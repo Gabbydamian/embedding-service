@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: embedding-service
+    env: python
+    plan: starter  # or free for testing
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.5
+      - key: MODEL_NAME
+        value: sentence-transformers/all-MiniLM-L6-v2
