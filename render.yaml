@@ -2,7 +2,7 @@ services:
   - type: web
     name: embedding-service
     env: python
-    plan: starter  # or free for testing
+    plan: free 
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /
