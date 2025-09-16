@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from sentence_transformers import SentenceTransformer
 import logging
 import os
+import gc
 from typing import List, Union
 
 # Configure logging
@@ -45,29 +46,36 @@ class HealthResponse(BaseModel):
 
 @app.on_event("startup")
 async def load_model():
-    """Load the embedding model on startup"""
     global model
     try:
         logger.info("Loading sentence-transformers model...")
-        model_name = os.getenv("MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
-        model = SentenceTransformer(model_name)
+        # Use a much smaller model - only ~61MB vs ~420MB for all-MiniLM-L6-v2
+        model_name = os.getenv("MODEL_NAME", "paraphrase-MiniLM-L3-v2")
+        
+        # Load model with CPU device to reduce memory usage
+        model = SentenceTransformer(model_name, device='cpu')
+        
+        # Force garbage collection to free up memory
+        gc.collect()
+        
         logger.info(f"Model {model_name} loaded successfully!")
+        logger.info(f"Model max sequence length: {model.max_seq_length}")
+        logger.info(f"Embedding dimension: {model.get_sentence_embedding_dimension()}")
+        
     except Exception as e:
         logger.error(f"Failed to load model: {str(e)}")
         raise e
 
 @app.get("/", response_model=HealthResponse)
 async def health_check():
-    """Health check endpoint"""
     return HealthResponse(
         status="healthy" if model is not None else "unhealthy",
         model_loaded=model is not None,
-        model_name=os.getenv("MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2")
+        model_name=os.getenv("MODEL_NAME", "paraphrase-MiniLM-L3-v2")
     )
 
 @app.post("/embed", response_model=EmbedResponse)
 async def embed_text(request: EmbedRequest):
-    """Generate embeddings for text"""
     if model is None:
         raise HTTPException(status_code=503, detail="Model not loaded")
     
@@ -91,7 +99,7 @@ async def embed_text(request: EmbedRequest):
         
         return EmbedResponse(
             embedding=embedding,
-            model_name=os.getenv("MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"),
+            model_name=os.getenv("MODEL_NAME", "paraphrase-MiniLM-L3-v2"),
             text_length=text_length
         )
     
@@ -106,7 +114,7 @@ async def get_model_info():
         raise HTTPException(status_code=503, detail="Model not loaded")
     
     return {
-        "model_name": os.getenv("MODEL_NAME", "sentence-transformers/all-MiniLM-L6-v2"),
+        "model_name": os.getenv("MODEL_NAME", "paraphrase-MiniLM-L3-v2"),
         "max_seq_length": model.max_seq_length,
         "embedding_dimension": model.get_sentence_embedding_dimension(),
     }
